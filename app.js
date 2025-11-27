@@ -1055,13 +1055,21 @@ class AudioPlayer {
 
         // Handle navigation
         switch(nav) {
+            case 'player':
+                // Show player view and hide mini player
+                document.getElementById('playerView').classList.add('active');
+                this.hideMiniPlayer();
+                break;
             case 'playlist':
-                // Show playlist view
+                // Show playlist view and show mini player if track is playing
                 document.getElementById('playlistView').classList.add('active');
                 this.renderPlaylistView();
+                if (this.currentIndex >= 0) {
+                    this.showMiniPlayer();
+                }
                 break;
             case 'library':
-                // Show library view
+                // Show library view and show mini player if track is playing
                 document.getElementById('libraryView').classList.add('active');
                 // Reset to folders view when switching to library tab
                 if (this.libraryView !== 'folders') {
@@ -1069,12 +1077,25 @@ class AudioPlayer {
                 } else {
                     this.renderLibraryView();
                 }
+                if (this.currentIndex >= 0) {
+                    this.showMiniPlayer();
+                }
                 break;
             case 'history':
-                // Show history view
+                // Show history view and show mini player if track is playing
                 document.getElementById('historyView').classList.add('active');
                 this.renderHistoryView();
+                if (this.currentIndex >= 0) {
+                    this.showMiniPlayer();
+                }
                 break;
+        }
+    }
+
+    // ===== Hide Mini Player =====
+    hideMiniPlayer() {
+        if (this.miniPlayer && window.innerWidth <= 968) {
+            this.miniPlayer.classList.remove('show');
         }
     }
 
