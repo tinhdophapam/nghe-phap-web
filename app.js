@@ -621,11 +621,11 @@ class AudioPlayer {
         this.addToRecentlyPlayed(track);
         this.updateQueue();
         this.saveState();
-        
+
         // Add playing animation to album art
         const albumArt = document.querySelector('.album-art-inner');
         if (albumArt) albumArt.classList.add('playing');
-        
+
         // Update mini player
         this.updateMiniPlayer(track);
         this.showMiniPlayer();
@@ -822,10 +822,20 @@ class AudioPlayer {
     }
 
     showMiniPlayer() {
-        if (this.miniPlayer && window.innerWidth <= 968) {
-            console.log('Showing mini player');
-            this.miniPlayer.classList.add('show');
-            this.miniPlayer.style.display = ''; // Ensure display is not none
+        console.log(`📊 Window width: ${window.innerWidth}px`);
+        if (window.innerWidth <= 968) {
+            console.log('📱 Mobile mode: Showing mini player');
+            if (this.miniPlayer) {
+                this.miniPlayer.classList.add('show');
+                this.miniPlayer.style.display = ''; // Ensure display is not none
+                console.log('✅ Mini player classList:', this.miniPlayer.classList.toString());
+            }
+        } else {
+            console.log('🖥️ Desktop mode: Full player already visible, hiding mini player');
+            // On desktop, ensure mini player is hidden
+            if (this.miniPlayer) {
+                this.miniPlayer.classList.remove('show');
+            }
         }
     }
 
@@ -1487,29 +1497,28 @@ class AudioPlayer {
                 this.closeMiniPlayer();
             });
         }
-        // Click/Touch on mini player content (except buttons and progress bar) to open full player
-        if (this.miniPlayerContent) {
-            const handleMiniPlayerClick = (e) => {
-                console.log('Mini player content clicked:', e.target.className);
-                
-                // Don't open if clicking on buttons or progress bar
-                if (!e.target.closest('.mini-control-btn') && !e.target.closest('.mini-progress-bar')) {
-                    console.log('Opening full player...');
+        // Click/Touch on mini player info (icon, tên bài, thời gian) to open full player
+        // Buttons và progress bar sẽ KHÔNG mở full player
+        if (this.miniPlayerInfo) {
+            const handleMiniPlayerInfoClick = (e) => {
+                console.log('🔵 Mini player info clicked:', e.target.className);
+
+                // CHỈ mở full player khi click vào .mini-player-info
+                // KHÔNG mở khi click vào buttons
+                if (!e.target.closest('.mini-player-controls')) {
+                    console.log('✅ Opening full player from mini-player-info');
                     this.openFullPlayer();
                 } else {
-                    console.log('Clicked on button or progress bar, not opening');
+                    console.log('❌ Clicked on controls, not opening');
                 }
             };
-            
+
             // Use both click and touchstart for better mobile responsiveness
-            this.miniPlayerContent.addEventListener('click', handleMiniPlayerClick);
-            this.miniPlayerContent.addEventListener('touchstart', (e) => {
-                // Only handle if not clicking on buttons
-                if (!e.target.closest('.mini-control-btn') && !e.target.closest('.mini-progress-bar')) {
-                    console.log('Mini player touched - opening full player');
-                    this.openFullPlayer();
-                    e.preventDefault(); // Prevent click event from firing
-                }
+            this.miniPlayerInfo.addEventListener('click', handleMiniPlayerInfoClick);
+            this.miniPlayerInfo.addEventListener('touchstart', (e) => {
+                console.log('🔵 Mini player info touched');
+                this.openFullPlayer();
+                e.preventDefault(); // Prevent click event from firing
             }, { passive: false });
         }
         
