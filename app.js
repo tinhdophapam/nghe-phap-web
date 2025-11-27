@@ -88,6 +88,7 @@ class AudioPlayer {
         this.applyTheme();
         this.updateStats();
         this.initBuddhaText();
+        this.initializeLibraryView();
     }
 
     // ===== Buddha Text Animation =====
@@ -98,14 +99,14 @@ class AudioPlayer {
         const text = 'Nam Mô A Di Đà Phật';
         const words = text.split(' ').filter(w => w.length > 0);
         
-        // 6 màu theo thứ tự từ Flutter
+        // 6 màu theo thứ tự từ Flutter (giống hệt)
         const colors = [
-            '#D84315', // Đỏ cam
-            '#C62828', // Đỏ thẫm
-            '#2E7D32', // Xanh lá
-            '#00838F', // Xanh ngọc
-            '#1565C0', // Xanh dương
-            '#6A1B9A', // Tím
+            '#D84315', // Deep Orange 900
+            '#C62828', // Red 800
+            '#2E7D32', // Green 800
+            '#00838F', // Cyan 800
+            '#1565C0', // Blue 800
+            '#6A1B9A', // Purple 800
         ];
 
         let currentWordIndex = 0;
@@ -113,10 +114,16 @@ class AudioPlayer {
         let cycleCount = 0;
 
         const updateText = () => {
-            // Hiển thị từ đầu đến từ hiện tại
+            // Hiển thị từ đầu đến từ hiện tại với animation
             const displayText = words.slice(0, currentWordIndex + 1).join(' ');
             buddhaNameEl.textContent = displayText;
             buddhaNameEl.style.color = colors[colorIndex];
+            
+            // Add subtle scale animation
+            buddhaNameEl.style.transform = 'scale(1.02)';
+            setTimeout(() => {
+                buddhaNameEl.style.transform = 'scale(1)';
+            }, 200);
 
             // Chuyển sang từ tiếp theo
             currentWordIndex++;
@@ -134,7 +141,7 @@ class AudioPlayer {
             }
         };
 
-        // Chạy mỗi 1 giây (1000ms)
+        // Chạy mỗi 1 giây (1000ms) - giống Flutter
         updateText(); // Hiển thị ngay lần đầu
         setInterval(updateText, 1000);
     }
@@ -180,138 +187,417 @@ class AudioPlayer {
         });
     }
 
+    // ===== Navigation State =====
+    currentView = 'folders'; // 'folders', 'subfolders', 'lectures'
+    currentFolderIndex = -1;
+    currentSubfolderIndex = -1;
+    navigationHistory = [];
+
     // ===== Render Playlist =====
     renderPlaylist(searchTerm = '') {
-        this.playlist.innerHTML = '';
-
-        // Filter based on current filter
-        let itemsToShow = this.flatPlaylist;
-        
+        // Handle special filters first
         if (this.currentFilter === 'favorites') {
-            itemsToShow = this.favorites;
-            if (itemsToShow.length === 0) {
-                this.playlist.innerHTML = '<div class="loading"><p>Chưa có bài yêu thích nào</p></div>';
-                return;
-            }
+            this.renderFavorites(searchTerm);
+            return;
         } else if (this.currentFilter === 'recent') {
-            itemsToShow = this.recentlyPlayed;
-            if (itemsToShow.length === 0) {
-                this.playlist.innerHTML = '<div class="loading"><p>Chưa có lịch sử nghe</p></div>';
-                return;
-            }
+            this.renderRecents(searchTerm);
+            return;
         }
 
-        // For favorites and recent, show flat list
-        if (this.currentFilter !== 'all') {
-            itemsToShow.forEach(item => {
+        // Render based on current view
+        switch (this.currentView) {
+            case 'folders':
+                this.renderFolders(searchTerm);
+                break;
+            case 'subfolders':
+                this.renderSubfolders(searchTerm);
+                break;
+            case 'lectures':
+                this.renderLectures(searchTerm);
+                break;
+        }
+    }
+
+    // ===== Render Folders (Main View) =====
+    renderFolders(searchTerm = '') {
+        this.playlist.innerHTML = '';
+
+        this.lectures.forEach((folder, folderIndex) => {
+            // Search filter
+            if (searchTerm && !folder.folder.toLowerCase().includes(searchTerm.toLowerCase())) {
+                return;
+            }
+
+            // Count subfolders and items
+            const subfolderCount = folder.subfolders ? folder.subfolders.length : 0;
+            const itemCount = folder.subfolders 
+                ? folder.subfolders.reduce((sum, sub) => sum + (sub.items ? sub.items.length : 0), 0)
+                : 0;
+
+            const folderCard = document.createElement('div');
+            folderCard.className = 'folder-card';
+            folderCard.innerHTML = `
+                <div class="folder-card-icon">
+                    <i class="fas fa-folder-open"></i>
+                </div>
+                <div class="folder-card-content">
+                    <div class="folder-card-title">${folder.folder}</div>
+                    <div class="folder-card-subtitle">${subfolderCount} thư mục • ${itemCount} bài</div>
+                </div>
+                <div class="folder-card-arrow">
+                    <i class="fas fa-chevron-right"></i>
+                </div>
+            `;
+
+            folderCard.addEventListener('click', () => {
+                this.navigateToSubfolders(folderIndex);
+            });
+
+            this.playlist.appendChild(folderCard);
+        });
+    }
+
+    // ===== Render Subfolders =====
+    renderSubfolders(searchTerm = '') {
+        this.playlist.innerHTML = '';
+
+        if (this.currentFolderIndex < 0 || this.currentFolderIndex >= this.lectures.length) {
+            this.navigateToFolders();
+            return;
+        }
+
+        const folder = this.lectures[this.currentFolderIndex];
+
+        // Add back button
+        const backBtn = document.createElement('div');
+        backBtn.className = 'back-button';
+        backBtn.innerHTML = `
+            <i class="fas fa-arrow-left"></i>
+            <span>Quay lại</span>
+        `;
+        backBtn.addEventListener('click', () => this.navigateToFolders());
+        this.playlist.appendChild(backBtn);
+
+        // Add folder title
+        const folderTitle = document.createElement('div');
+        folderTitle.className = 'folder-title';
+        folderTitle.textContent = folder.folder;
+        this.playlist.appendChild(folderTitle);
+
+        // Render subfolders
+        if (folder.subfolders) {
+            folder.subfolders.forEach((subfolder, subfolderIndex) => {
+                // Search filter
+                if (searchTerm && !subfolder.name.toLowerCase().includes(searchTerm.toLowerCase())) {
+                    return;
+                }
+
+                const itemCount = subfolder.items ? subfolder.items.length : 0;
+
+                const subfolderCard = document.createElement('div');
+                subfolderCard.className = 'folder-card';
+                subfolderCard.innerHTML = `
+                    <div class="folder-card-icon">
+                        <i class="fas fa-folder"></i>
+                    </div>
+                    <div class="folder-card-content">
+                        <div class="folder-card-title">${subfolder.name}</div>
+                        <div class="folder-card-subtitle">${itemCount} bài giảng</div>
+                    </div>
+                    <div class="folder-card-arrow">
+                        <i class="fas fa-chevron-right"></i>
+                    </div>
+                `;
+
+                subfolderCard.addEventListener('click', () => {
+                    this.navigateToLectures(subfolderIndex);
+                });
+
+                this.playlist.appendChild(subfolderCard);
+            });
+        }
+    }
+
+    // ===== Render Lectures =====
+    renderLectures(searchTerm = '') {
+        this.playlist.innerHTML = '';
+
+        if (this.currentFolderIndex < 0 || this.currentSubfolderIndex < 0) {
+            this.navigateToFolders();
+            return;
+        }
+
+        const folder = this.lectures[this.currentFolderIndex];
+        const subfolder = folder.subfolders[this.currentSubfolderIndex];
+
+        // Add back button
+        const backBtn = document.createElement('div');
+        backBtn.className = 'back-button';
+        backBtn.innerHTML = `
+            <i class="fas fa-arrow-left"></i>
+            <span>Quay lại</span>
+        `;
+        backBtn.addEventListener('click', () => this.navigateToSubfolders(this.currentFolderIndex));
+        this.playlist.appendChild(backBtn);
+
+        // Add subfolder title
+        const subfolderTitle = document.createElement('div');
+        subfolderTitle.className = 'folder-title';
+        subfolderTitle.textContent = subfolder.name;
+        this.playlist.appendChild(subfolderTitle);
+
+        // Render lectures
+        if (subfolder.items) {
+            subfolder.items.forEach((item, itemIndex) => {
+                // Search filter
                 if (searchTerm && !item.title.toLowerCase().includes(searchTerm.toLowerCase())) {
                     return;
                 }
 
-                const trackEl = document.createElement('div');
-                trackEl.className = 'track-item';
-                trackEl.innerHTML = `
-                    <span class="track-title">${item.title}</span>
-                    <span class="track-duration">${item.duration || ''}</span>
+                // Find index in flat playlist
+                const flatIndex = this.flatPlaylist.findIndex(t => t.url === item.url);
+                const isActive = flatIndex === this.currentIndex;
+
+                const trackCard = document.createElement('div');
+                trackCard.className = `track-card ${isActive ? 'active' : ''}`;
+                trackCard.innerHTML = `
+                    <div class="track-card-icon">
+                        <i class="fas ${isActive ? 'fa-volume-up' : 'fa-music'}"></i>
+                    </div>
+                    <div class="track-card-content">
+                        <div class="track-card-title">${item.title}</div>
+                        <div class="track-card-subtitle">${item.duration || '--:--'}</div>
+                    </div>
+                    <div class="track-card-actions">
+                        <button class="track-action-btn favorite-track-btn ${this.favorites.some(f => f.url === item.url) ? 'active' : ''}" data-url="${item.url}">
+                            <i class="fas fa-heart"></i>
+                        </button>
+                    </div>
                 `;
 
-                const flatIndex = this.flatPlaylist.findIndex(t => t.url === item.url);
-                trackEl.addEventListener('click', () => {
-                    this.playTrack(flatIndex);
+                trackCard.addEventListener('click', (e) => {
+                    if (!e.target.closest('.track-action-btn')) {
+                        this.playTrack(flatIndex);
+                    }
                 });
 
-                this.playlist.appendChild(trackEl);
+                // Favorite button
+                const favoriteBtn = trackCard.querySelector('.favorite-track-btn');
+                favoriteBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    this.toggleFavoriteTrack(item);
+                    favoriteBtn.classList.toggle('active');
+                });
+
+                this.playlist.appendChild(trackCard);
             });
-            this.updateActiveTrack();
+        }
+    }
+
+    // ===== Render Favorites (Playlist) =====
+    renderFavorites(searchTerm = '') {
+        this.playlist.innerHTML = '';
+
+        if (this.favorites.length === 0) {
+            this.playlist.innerHTML = `
+                <div class="empty-state">
+                    <i class="fas fa-playlist-play"></i>
+                    <h3>Playlist trống</h3>
+                    <p>Thêm thư mục, thư mục con hoặc bài giảng vào playlist bằng cách nhấn vào biểu tượng ngôi sao.</p>
+                </div>
+            `;
             return;
         }
 
-        this.lectures.forEach((folder, folderIndex) => {
-            const folderEl = document.createElement('div');
-            folderEl.className = 'folder';
-            folderEl.dataset.folderIndex = folderIndex;
+        // Add "Danh sách bài tự chọn" section (expandable) - Always show first
+        const customPlaylistCard = document.createElement('div');
+        customPlaylistCard.className = 'custom-playlist-card';
+        customPlaylistCard.innerHTML = `
+            <div class="custom-playlist-header">
+                <div class="custom-playlist-icon">
+                    <i class="fas fa-queue-music"></i>
+                </div>
+                <div class="custom-playlist-content">
+                    <div class="custom-playlist-title">Danh sách bài tự chọn</div>
+                    <div class="custom-playlist-subtitle">${this.favorites.length} bài đã chọn</div>
+                </div>
+                ${this.favorites.length > 0 ? `
+                    <button class="custom-playlist-play-btn" title="Phát tất cả">
+                        <i class="fas fa-play-circle"></i>
+                    </button>
+                ` : ''}
+                <button class="custom-playlist-toggle">
+                    <i class="fas fa-chevron-down"></i>
+                </button>
+            </div>
+            <div class="custom-playlist-items collapsed"></div>
+        `;
 
-            const folderHeader = document.createElement('div');
-            folderHeader.className = 'folder-header';
-            folderHeader.innerHTML = `
-                <i class="fas fa-chevron-down"></i>
-                <span>${folder.folder}</span>
-            `;
-
-            const folderContent = document.createElement('div');
-            folderContent.className = 'folder-content';
-
-            let hasVisibleItems = false;
-
-            if (folder.subfolders) {
-                folder.subfolders.forEach((subfolder, subfolderIndex) => {
-                    const subfolderEl = document.createElement('div');
-                    subfolderEl.className = 'subfolder';
-
-                    const subfolderHeader = document.createElement('div');
-                    subfolderHeader.className = 'subfolder-header';
-                    subfolderHeader.innerHTML = `
-                        <i class="fas fa-chevron-down"></i>
-                        <span>${subfolder.name}</span>
-                    `;
-
-                    const subfolderItems = document.createElement('div');
-                    subfolderItems.className = 'subfolder-items';
-
-                    if (subfolder.items) {
-                        subfolder.items.forEach((item, itemIndex) => {
-                            // Search filter
-                            if (searchTerm && !item.title.toLowerCase().includes(searchTerm.toLowerCase())) {
-                                return;
-                            }
-
-                            hasVisibleItems = true;
-
-                            const trackEl = document.createElement('div');
-                            trackEl.className = 'track-item';
-                            trackEl.innerHTML = `
-                                <span class="track-title">${item.title}</span>
-                                <span class="track-duration">${item.duration || ''}</span>
-                            `;
-
-                            // Find index in flat playlist
-                            const flatIndex = this.flatPlaylist.findIndex(
-                                t => t.url === item.url
-                            );
-
-                            trackEl.addEventListener('click', () => {
-                                this.playTrack(flatIndex);
-                            });
-
-                            subfolderItems.appendChild(trackEl);
-                        });
+        const playBtn = customPlaylistCard.querySelector('.custom-playlist-play-btn');
+        if (playBtn) {
+            playBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                if (this.favorites.length > 0) {
+                    const firstIndex = this.flatPlaylist.findIndex(t => t.url === this.favorites[0].url);
+                    if (firstIndex >= 0) {
+                        this.playTrack(firstIndex);
                     }
+                }
+            });
+        }
 
-                    if (subfolderItems.children.length > 0) {
-                        subfolderHeader.addEventListener('click', () => {
-                            subfolderEl.classList.toggle('collapsed');
-                        });
-
-                        subfolderEl.appendChild(subfolderHeader);
-                        subfolderEl.appendChild(subfolderItems);
-                        folderContent.appendChild(subfolderEl);
-                    }
-                });
-            }
-
-            if (hasVisibleItems || !searchTerm) {
-                folderHeader.addEventListener('click', () => {
-                    folderEl.classList.toggle('collapsed');
-                });
-
-                folderEl.appendChild(folderHeader);
-                folderEl.appendChild(folderContent);
-                this.playlist.appendChild(folderEl);
+        const toggleBtn = customPlaylistCard.querySelector('.custom-playlist-toggle');
+        const itemsContainer = customPlaylistCard.querySelector('.custom-playlist-items');
+        
+        const headerDiv = customPlaylistCard.querySelector('.custom-playlist-header');
+        headerDiv.addEventListener('click', (e) => {
+            // Don't toggle if clicking on play button
+            if (!e.target.closest('.custom-playlist-play-btn')) {
+                itemsContainer.classList.toggle('collapsed');
+                const icon = toggleBtn.querySelector('i');
+                icon.classList.toggle('fa-chevron-down');
+                icon.classList.toggle('fa-chevron-up');
             }
         });
 
-        // Update active track
-        this.updateActiveTrack();
+        // Render favorite items in expandable section
+        this.favorites.forEach(item => {
+            const flatIndex = this.flatPlaylist.findIndex(t => t.url === item.url);
+            const isActive = flatIndex === this.currentIndex;
+
+            const itemEl = document.createElement('div');
+            itemEl.className = `custom-playlist-item ${isActive ? 'active' : ''}`;
+            itemEl.innerHTML = `
+                <div class="custom-playlist-item-icon">
+                    <i class="fas fa-music"></i>
+                </div>
+                <div class="custom-playlist-item-content">
+                    <div class="custom-playlist-item-title">${item.title}</div>
+                    <div class="custom-playlist-item-subtitle">${item.teacher || item.folder}</div>
+                </div>
+                <button class="custom-playlist-item-remove" title="Xóa khỏi danh sách">
+                    <i class="fas fa-times-circle"></i>
+                </button>
+            `;
+
+            itemEl.addEventListener('click', (e) => {
+                if (!e.target.closest('.custom-playlist-item-remove')) {
+                    this.playTrack(flatIndex);
+                }
+            });
+
+            const removeBtn = itemEl.querySelector('.custom-playlist-item-remove');
+            removeBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                this.toggleFavoriteTrack(item);
+                itemEl.remove();
+                // Update count
+                const subtitle = customPlaylistCard.querySelector('.custom-playlist-subtitle');
+                subtitle.textContent = `${this.favorites.length} bài đã chọn`;
+                
+                // Hide play button if no items
+                if (this.favorites.length === 0 && playBtn) {
+                    playBtn.remove();
+                }
+            });
+
+            itemsContainer.appendChild(itemEl);
+        });
+
+        this.playlist.appendChild(customPlaylistCard);
+    }
+
+    // ===== Render Recents (History) =====
+    renderRecents(searchTerm = '') {
+        this.playlist.innerHTML = '';
+
+        if (this.recentlyPlayed.length === 0) {
+            this.playlist.innerHTML = `
+                <div class="empty-state">
+                    <i class="fas fa-history"></i>
+                    <h3>Chưa có lịch sử phát</h3>
+                    <p>Các bài giảng bạn đã nghe sẽ xuất hiện ở đây.</p>
+                </div>
+            `;
+            return;
+        }
+
+        this.recentlyPlayed.forEach(item => {
+            if (searchTerm && !item.title.toLowerCase().includes(searchTerm.toLowerCase())) {
+                return;
+            }
+
+            const flatIndex = this.flatPlaylist.findIndex(t => t.url === item.url);
+            const isActive = flatIndex === this.currentIndex;
+
+            const historyCard = document.createElement('div');
+            historyCard.className = 'history-card';
+            historyCard.innerHTML = `
+                <div class="history-card-icon">
+                    <i class="fas fa-history"></i>
+                </div>
+                <div class="history-card-content">
+                    <div class="history-card-title">${item.title}</div>
+                    <div class="history-card-subtitle">${item.teacher || item.folder}</div>
+                    <div class="history-card-location">
+                        <i class="fas fa-folder"></i>
+                        <span>${item.folder} › ${item.subfolder}</span>
+                    </div>
+                </div>
+                <div class="history-card-actions">
+                    <button class="track-action-btn favorite-track-btn ${this.favorites.some(f => f.url === item.url) ? 'active' : ''}" data-url="${item.url}">
+                        <i class="fas fa-heart"></i>
+                    </button>
+                </div>
+            `;
+
+            historyCard.addEventListener('click', (e) => {
+                if (!e.target.closest('.track-action-btn')) {
+                    this.playTrack(flatIndex);
+                }
+            });
+
+            const favoriteBtn = historyCard.querySelector('.favorite-track-btn');
+            favoriteBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                this.toggleFavoriteTrack(item);
+                favoriteBtn.classList.toggle('active');
+            });
+
+            this.playlist.appendChild(historyCard);
+        });
+    }
+
+    // ===== Navigation Methods =====
+    navigateToFolders() {
+        this.currentView = 'folders';
+        this.currentFolderIndex = -1;
+        this.currentSubfolderIndex = -1;
+        this.renderPlaylist();
+    }
+
+    navigateToSubfolders(folderIndex) {
+        this.currentView = 'subfolders';
+        this.currentFolderIndex = folderIndex;
+        this.currentSubfolderIndex = -1;
+        this.renderPlaylist();
+    }
+
+    navigateToLectures(subfolderIndex) {
+        this.currentView = 'lectures';
+        this.currentSubfolderIndex = subfolderIndex;
+        this.renderPlaylist();
+    }
+
+    toggleFavoriteTrack(item) {
+        const index = this.favorites.findIndex(f => f.url === item.url);
+        if (index >= 0) {
+            this.favorites.splice(index, 1);
+        } else {
+            this.favorites.push(item);
+        }
+        localStorage.setItem('favorites', JSON.stringify(this.favorites));
+        this.updateStats();
     }
 
     // ===== Play Track =====
@@ -347,19 +633,8 @@ class AudioPlayer {
 
     // ===== Update Active Track Highlight =====
     updateActiveTrack() {
-        document.querySelectorAll('.track-item').forEach(el => {
-            el.classList.remove('active');
-        });
-
-        if (this.currentIndex >= 0) {
-            const currentTrack = this.flatPlaylist[this.currentIndex];
-            document.querySelectorAll('.track-item').forEach(el => {
-                const title = el.querySelector('.track-title').textContent;
-                if (title === currentTrack.title) {
-                    el.classList.add('active');
-                }
-            });
-        }
+        // Active state is now handled during rendering
+        // This method is kept for backward compatibility
     }
 
     // ===== Scroll to Active Track =====
@@ -548,7 +823,9 @@ class AudioPlayer {
 
     showMiniPlayer() {
         if (this.miniPlayer && window.innerWidth <= 968) {
+            console.log('Showing mini player');
             this.miniPlayer.classList.add('show');
+            this.miniPlayer.style.display = ''; // Ensure display is not none
         }
     }
 
@@ -568,9 +845,11 @@ class AudioPlayer {
     }
 
     openFullPlayer() {
+        console.log('🔵 openFullPlayer called, window width:', window.innerWidth);
         if (window.innerWidth <= 968) {
             const playerSection = document.querySelector('.player-section');
             if (playerSection) {
+                console.log('✅ Opening full player');
                 playerSection.classList.add('fullscreen');
                 
                 // Add close button for fullscreen
@@ -584,9 +863,30 @@ class AudioPlayer {
                 
                 // Hide mini player when full player is open
                 if (this.miniPlayer) {
+                    console.log('🔵 Hiding mini player');
                     this.miniPlayer.style.display = 'none';
                 }
             }
+        } else {
+            console.log('❌ Window width > 968, not opening full player');
+        }
+    }
+
+    closeFullPlayer() {
+        console.log('Closing full player');
+        const playerSection = document.querySelector('.player-section');
+        if (playerSection) {
+            playerSection.classList.remove('fullscreen');
+            // Remove close button
+            const closeBtn = playerSection.querySelector('.close-fullscreen');
+            if (closeBtn) {
+                closeBtn.remove();
+            }
+        }
+        // Show mini player again
+        if (this.miniPlayer) {
+            console.log('Showing mini player again');
+            this.miniPlayer.style.display = '';
         }
     }
 
@@ -594,10 +894,15 @@ class AudioPlayer {
         const playerSection = document.querySelector('.player-section');
         if (playerSection) {
             playerSection.classList.remove('fullscreen');
+            // Remove close button
+            const closeBtn = playerSection.querySelector('.close-fullscreen');
+            if (closeBtn) {
+                closeBtn.remove();
+            }
         }
         // Show mini player again
         if (this.miniPlayer) {
-            this.miniPlayer.style.display = 'block';
+            this.miniPlayer.style.display = '';
         }
     }
 
@@ -645,24 +950,336 @@ class AudioPlayer {
         });
         document.querySelector(`[data-nav="${nav}"]`).classList.add('active');
 
+        // Hide all content views
+        document.querySelectorAll('.content-view').forEach(view => {
+            view.classList.remove('active');
+        });
+
         // Handle navigation
         switch(nav) {
             case 'playlist':
-                this.currentFilter = 'all';
-                this.renderPlaylist();
-                this.toggleSidebar();
+                // Show sidebar on mobile
+                if (window.innerWidth <= 968) {
+                    this.toggleSidebar();
+                }
+                // Keep player view visible on desktop
+                document.getElementById('playerView').classList.add('active');
                 break;
             case 'library':
-                this.currentFilter = 'favorites';
-                this.renderPlaylist();
-                this.toggleSidebar();
+                // Show library view
+                document.getElementById('libraryView').classList.add('active');
+                // Reset to folders view when switching to library tab
+                if (this.libraryView !== 'folders') {
+                    this.navigateLibraryToFolders();
+                } else {
+                    this.renderLibraryView();
+                }
                 break;
             case 'history':
-                this.currentFilter = 'recent';
-                this.renderPlaylist();
-                this.toggleSidebar();
+                // Show history view
+                document.getElementById('historyView').classList.add('active');
+                this.renderHistoryView();
                 break;
         }
+    }
+
+    // ===== Initialize Library View =====
+    initializeLibraryView() {
+        // Render library content when data is loaded
+        if (this.lectures.length > 0) {
+            this.renderLibraryView();
+        }
+    }
+
+    // ===== Library Navigation State =====
+    libraryView = 'folders'; // 'folders', 'subfolders', 'lectures'
+    libraryFolderIndex = -1;
+    librarySubfolderIndex = -1;
+
+    // ===== Render Library View =====
+    renderLibraryView() {
+        const libraryContent = document.getElementById('libraryContent');
+        if (!libraryContent) return;
+
+        libraryContent.innerHTML = '';
+
+        // Render based on library view state
+        switch (this.libraryView) {
+            case 'folders':
+                this.renderLibraryFolders(libraryContent);
+                break;
+            case 'subfolders':
+                this.renderLibrarySubfolders(libraryContent);
+                break;
+            case 'lectures':
+                this.renderLibraryLectures(libraryContent);
+                break;
+        }
+    }
+
+    // ===== Render Library Folders =====
+    renderLibraryFolders(container) {
+        this.lectures.forEach((folder, folderIndex) => {
+            const subfolderCount = folder.subfolders ? folder.subfolders.length : 0;
+            const itemCount = folder.subfolders 
+                ? folder.subfolders.reduce((sum, sub) => sum + (sub.items ? sub.items.length : 0), 0)
+                : 0;
+
+            const folderCard = document.createElement('div');
+            folderCard.className = 'folder-card';
+            folderCard.innerHTML = `
+                <div class="folder-card-icon">
+                    <i class="fas fa-folder-open"></i>
+                </div>
+                <div class="folder-card-content">
+                    <div class="folder-card-title">${folder.folder}</div>
+                    <div class="folder-card-subtitle">${subfolderCount} thư mục • ${itemCount} bài</div>
+                </div>
+                <div class="folder-card-arrow">
+                    <i class="fas fa-chevron-right"></i>
+                </div>
+            `;
+
+            folderCard.addEventListener('click', () => {
+                this.navigateLibraryToSubfolders(folderIndex);
+            });
+
+            container.appendChild(folderCard);
+        });
+    }
+
+    // ===== Render Library Subfolders =====
+    renderLibrarySubfolders(container) {
+        if (this.libraryFolderIndex < 0 || this.libraryFolderIndex >= this.lectures.length) {
+            this.navigateLibraryToFolders();
+            return;
+        }
+
+        const folder = this.lectures[this.libraryFolderIndex];
+
+        // Add back button
+        const backBtn = document.createElement('div');
+        backBtn.className = 'back-button';
+        backBtn.innerHTML = `
+            <i class="fas fa-arrow-left"></i>
+            <span>Quay lại</span>
+        `;
+        backBtn.addEventListener('click', () => this.navigateLibraryToFolders());
+        container.appendChild(backBtn);
+
+        // Add folder title
+        const folderTitle = document.createElement('div');
+        folderTitle.className = 'folder-title';
+        folderTitle.textContent = folder.folder;
+        container.appendChild(folderTitle);
+
+        // Render subfolders
+        if (folder.subfolders) {
+            folder.subfolders.forEach((subfolder, subfolderIndex) => {
+                const itemCount = subfolder.items ? subfolder.items.length : 0;
+
+                const subfolderCard = document.createElement('div');
+                subfolderCard.className = 'folder-card';
+                subfolderCard.innerHTML = `
+                    <div class="folder-card-icon">
+                        <i class="fas fa-folder"></i>
+                    </div>
+                    <div class="folder-card-content">
+                        <div class="folder-card-title">${subfolder.name}</div>
+                        <div class="folder-card-subtitle">${itemCount} bài giảng</div>
+                    </div>
+                    <div class="folder-card-arrow">
+                        <i class="fas fa-chevron-right"></i>
+                    </div>
+                `;
+
+                subfolderCard.addEventListener('click', () => {
+                    this.navigateLibraryToLectures(subfolderIndex);
+                });
+
+                container.appendChild(subfolderCard);
+            });
+        }
+    }
+
+    // ===== Render Library Lectures =====
+    renderLibraryLectures(container) {
+        if (this.libraryFolderIndex < 0 || this.librarySubfolderIndex < 0) {
+            this.navigateLibraryToFolders();
+            return;
+        }
+
+        const folder = this.lectures[this.libraryFolderIndex];
+        const subfolder = folder.subfolders[this.librarySubfolderIndex];
+
+        // Add back button
+        const backBtn = document.createElement('div');
+        backBtn.className = 'back-button';
+        backBtn.innerHTML = `
+            <i class="fas fa-arrow-left"></i>
+            <span>Quay lại</span>
+        `;
+        backBtn.addEventListener('click', () => this.navigateLibraryToSubfolders(this.libraryFolderIndex));
+        container.appendChild(backBtn);
+
+        // Add subfolder title
+        const subfolderTitle = document.createElement('div');
+        subfolderTitle.className = 'folder-title';
+        subfolderTitle.textContent = subfolder.name;
+        container.appendChild(subfolderTitle);
+
+        // Render lectures
+        if (subfolder.items) {
+            subfolder.items.forEach((item, itemIndex) => {
+                // Find index in flat playlist
+                const flatIndex = this.flatPlaylist.findIndex(t => t.url === item.url);
+                const isActive = flatIndex === this.currentIndex;
+
+                const trackCard = document.createElement('div');
+                trackCard.className = `track-card ${isActive ? 'active' : ''}`;
+                trackCard.innerHTML = `
+                    <div class="track-card-icon">
+                        <i class="fas ${isActive ? 'fa-volume-up' : 'fa-music'}"></i>
+                    </div>
+                    <div class="track-card-content">
+                        <div class="track-card-title">${item.title}</div>
+                        <div class="track-card-subtitle">${item.duration || '--:--'}</div>
+                    </div>
+                    <div class="track-card-actions">
+                        <button class="track-action-btn favorite-track-btn ${this.favorites.some(f => f.url === item.url) ? 'active' : ''}" data-url="${item.url}">
+                            <i class="fas fa-heart"></i>
+                        </button>
+                    </div>
+                `;
+
+                trackCard.addEventListener('click', (e) => {
+                    if (!e.target.closest('.track-action-btn')) {
+                        this.playTrack(flatIndex);
+                    }
+                });
+
+                // Favorite button
+                const favoriteBtn = trackCard.querySelector('.favorite-track-btn');
+                favoriteBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    this.toggleFavoriteTrack(item);
+                    favoriteBtn.classList.toggle('active');
+                });
+
+                container.appendChild(trackCard);
+            });
+        }
+    }
+
+    // ===== Library Navigation Methods =====
+    navigateLibraryToFolders() {
+        this.libraryView = 'folders';
+        this.libraryFolderIndex = -1;
+        this.librarySubfolderIndex = -1;
+        this.renderLibraryView();
+        // Update header
+        const header = document.querySelector('#libraryView .library-header h2');
+        if (header) {
+            header.innerHTML = '<i class="fas fa-book"></i> Thư viện';
+        }
+        const subtitle = document.querySelector('#libraryView .library-subtitle');
+        if (subtitle) {
+            subtitle.textContent = 'Danh sách tất cả bài giảng';
+        }
+    }
+
+    navigateLibraryToSubfolders(folderIndex) {
+        this.libraryView = 'subfolders';
+        this.libraryFolderIndex = folderIndex;
+        this.librarySubfolderIndex = -1;
+        this.renderLibraryView();
+        // Update header
+        const folder = this.lectures[folderIndex];
+        const header = document.querySelector('#libraryView .library-header h2');
+        if (header) {
+            header.innerHTML = '<i class="fas fa-folder-open"></i> ' + folder.folder;
+        }
+        const subtitle = document.querySelector('#libraryView .library-subtitle');
+        if (subtitle) {
+            subtitle.textContent = 'Chọn thư mục con để xem bài giảng';
+        }
+    }
+
+    navigateLibraryToLectures(subfolderIndex) {
+        this.libraryView = 'lectures';
+        this.librarySubfolderIndex = subfolderIndex;
+        this.renderLibraryView();
+        // Update header
+        const folder = this.lectures[this.libraryFolderIndex];
+        const subfolder = folder.subfolders[subfolderIndex];
+        const header = document.querySelector('#libraryView .library-header h2');
+        if (header) {
+            header.innerHTML = '<i class="fas fa-folder"></i> ' + subfolder.name;
+        }
+        const subtitle = document.querySelector('#libraryView .library-subtitle');
+        if (subtitle) {
+            subtitle.textContent = folder.folder;
+        }
+    }
+
+    // ===== Render History View =====
+    renderHistoryView() {
+        const historyContent = document.getElementById('historyContent');
+        if (!historyContent) return;
+
+        historyContent.innerHTML = '';
+
+        if (this.recentlyPlayed.length === 0) {
+            historyContent.innerHTML = `
+                <div class="empty-state">
+                    <i class="fas fa-history"></i>
+                    <h3>Chưa có lịch sử phát</h3>
+                    <p>Các bài giảng bạn đã nghe sẽ xuất hiện ở đây.</p>
+                </div>
+            `;
+            return;
+        }
+
+        this.recentlyPlayed.forEach(item => {
+            const flatIndex = this.flatPlaylist.findIndex(t => t.url === item.url);
+            const isActive = flatIndex === this.currentIndex;
+
+            const historyCard = document.createElement('div');
+            historyCard.className = 'history-card';
+            historyCard.innerHTML = `
+                <div class="history-card-icon">
+                    <i class="fas fa-history"></i>
+                </div>
+                <div class="history-card-content">
+                    <div class="history-card-title">${item.title}</div>
+                    <div class="history-card-subtitle">${item.teacher || item.folder}</div>
+                    <div class="history-card-location">
+                        <i class="fas fa-folder"></i>
+                        <span>${item.folder} › ${item.subfolder}</span>
+                    </div>
+                </div>
+                <div class="history-card-actions">
+                    <button class="track-action-btn favorite-track-btn ${this.favorites.some(f => f.url === item.url) ? 'active' : ''}" data-url="${item.url}">
+                        <i class="fas fa-heart"></i>
+                    </button>
+                </div>
+            `;
+
+            historyCard.addEventListener('click', (e) => {
+                if (!e.target.closest('.track-action-btn')) {
+                    this.playTrack(flatIndex);
+                }
+            });
+
+            const favoriteBtn = historyCard.querySelector('.favorite-track-btn');
+            favoriteBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                this.toggleFavoriteTrack(item);
+                favoriteBtn.classList.toggle('active');
+            });
+
+            historyContent.appendChild(historyCard);
+        });
     }
 
     // ===== Search =====
@@ -870,14 +1487,37 @@ class AudioPlayer {
                 this.closeMiniPlayer();
             });
         }
-        if (this.miniPlayerInfo) {
-            this.miniPlayerInfo.addEventListener('click', () => {
-                this.openFullPlayer();
-            });
+        // Click/Touch on mini player content (except buttons and progress bar) to open full player
+        if (this.miniPlayerContent) {
+            const handleMiniPlayerClick = (e) => {
+                console.log('Mini player content clicked:', e.target.className);
+                
+                // Don't open if clicking on buttons or progress bar
+                if (!e.target.closest('.mini-control-btn') && !e.target.closest('.mini-progress-bar')) {
+                    console.log('Opening full player...');
+                    this.openFullPlayer();
+                } else {
+                    console.log('Clicked on button or progress bar, not opening');
+                }
+            };
+            
+            // Use both click and touchstart for better mobile responsiveness
+            this.miniPlayerContent.addEventListener('click', handleMiniPlayerClick);
+            this.miniPlayerContent.addEventListener('touchstart', (e) => {
+                // Only handle if not clicking on buttons
+                if (!e.target.closest('.mini-control-btn') && !e.target.closest('.mini-progress-bar')) {
+                    console.log('Mini player touched - opening full player');
+                    this.openFullPlayer();
+                    e.preventDefault(); // Prevent click event from firing
+                }
+            }, { passive: false });
         }
+        
+        // Progress bar seek (separate handler)
         if (this.miniProgressBar) {
             this.miniProgressBar.addEventListener('click', (e) => {
                 e.stopPropagation();
+                console.log('Progress bar clicked - seeking');
                 this.seekMini(e);
             });
         }

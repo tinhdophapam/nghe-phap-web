@@ -89,14 +89,16 @@
         </aside>
 
         <!-- Main Content -->
-        <main class="main-content">
+        <main class="main-content" id="mainContent">
             <!-- Animated Background -->
             <div class="animated-bg"></div>
 
-            <!-- Buddha Name Section -->
-            <div class="buddha-name-section">
-                <h1 class="buddha-name">Nam Mô A Di Đà Phật</h1>
-            </div>
+            <!-- Player View (Default) -->
+            <div class="content-view active" id="playerView">
+                <!-- Buddha Name Section -->
+                <div class="buddha-name-section">
+                    <h1 class="buddha-name">Nam Mô A Di Đà Phật</h1>
+                </div>
 
             <!-- Slogan Section -->
             <div class="slogan-section">
@@ -205,9 +207,37 @@
                 </div>
             </div>
 
-            <!-- Lotus Decoration -->
-            <div class="lotus-decoration">
-                <img src="hoasen.png" alt="Hoa Sen">
+                <!-- Lotus Decoration -->
+                <div class="lotus-decoration">
+                    <img src="hoasen.png" alt="Hoa Sen">
+                </div>
+            </div>
+
+            <!-- Library View -->
+            <div class="content-view" id="libraryView">
+                <div class="library-header">
+                    <h2><i class="fas fa-book"></i> Thư viện</h2>
+                    <p class="library-subtitle">Danh sách tất cả bài giảng</p>
+                </div>
+                <div class="library-content" id="libraryContent">
+                    <div class="loading">
+                        <i class="fas fa-spinner fa-spin"></i>
+                        <p>Đang tải thư viện...</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- History View -->
+            <div class="content-view" id="historyView">
+                <div class="library-header">
+                    <h2><i class="fas fa-history"></i> Lịch sử</h2>
+                    <p class="library-subtitle">Các bài đã nghe gần đây</p>
+                </div>
+                <div class="library-content" id="historyContent">
+                    <div class="loading">
+                        <p>Chưa có lịch sử nghe</p>
+                    </div>
+                </div>
             </div>
         </main>
 
