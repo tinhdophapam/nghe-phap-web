@@ -372,7 +372,7 @@ class AudioPlayer {
                     </div>
                     <div class="track-card-actions">
                         <button class="track-action-btn favorite-track-btn ${this.favorites.some(f => f.url === item.url) ? 'active' : ''}" data-url="${item.url}">
-                            <i class="fas fa-heart"></i>
+                            <i class="fas fa-star"></i>
                         </button>
                     </div>
                 `;
@@ -1004,7 +1004,7 @@ class AudioPlayer {
         favoritesSection.className = 'playlist-section';
         favoritesSection.innerHTML = `
             <div class="playlist-section-header">
-                <h3><i class="fas fa-heart"></i> Bài yêu thích</h3>
+                <h3><i class="fas fa-star"></i> Bài yêu thích</h3>
                 <span class="playlist-section-count">${this.favorites.length} bài</span>
             </div>
         `;
@@ -1015,7 +1015,7 @@ class AudioPlayer {
             const emptyState = document.createElement('div');
             emptyState.className = 'empty-state-small';
             emptyState.innerHTML = `
-                <p>Chưa có bài yêu thích. Nhấn vào <i class="fas fa-heart"></i> để thêm bài vào playlist.</p>
+                <p>Chưa có bài yêu thích. Nhấn vào <i class="fas fa-star"></i> để thêm bài vào playlist.</p>
             `;
             container.appendChild(emptyState);
             return;
@@ -1038,7 +1038,7 @@ class AudioPlayer {
                 </div>
                 <div class="track-card-actions">
                     <button class="track-action-btn favorite-track-btn active" data-url="${item.url}">
-                        <i class="fas fa-heart"></i>
+                        <i class="fas fa-star"></i>
                     </button>
                 </div>
             `;
@@ -1069,10 +1069,8 @@ class AudioPlayer {
         quickAccessSection.className = 'playlist-section';
         quickAccessSection.innerHTML = `
             <div class="playlist-section-header">
-                <h3><i class="fas fa-folder-open"></i> Thư mục con</h3>
-                <button class="playlist-section-action" id="addSubfolderBtn">
-                    <i class="fas fa-plus"></i> Thêm thư mục
-                </button>
+                <h3><i class="fas fa-star"></i> Thư mục yêu thích</h3>
+                <span class="playlist-section-count" id="favSubfolderCount">0 thư mục</span>
             </div>
         `;
         container.appendChild(quickAccessSection);
@@ -1080,11 +1078,17 @@ class AudioPlayer {
         // Get saved quick access subfolders from localStorage
         const quickAccessSubfolders = JSON.parse(localStorage.getItem('quickAccessSubfolders') || '[]');
 
+        // Update count
+        const countSpan = container.querySelector('#favSubfolderCount');
+        if (countSpan) {
+            countSpan.textContent = `${quickAccessSubfolders.length} thư mục`;
+        }
+
         if (quickAccessSubfolders.length === 0) {
             const emptyState = document.createElement('div');
             emptyState.className = 'empty-state-small';
             emptyState.innerHTML = `
-                <p>Chưa có thư mục con nào. Nhấn "Thêm thư mục" để thêm thư mục con vào playlist.</p>
+                <p>Chưa có thư mục yêu thích. Vào <strong>Thư viện</strong> và nhấn vào <i class="fas fa-star"></i> ở subfolder để thêm vào playlist.</p>
             `;
             container.appendChild(emptyState);
         } else {
@@ -1133,20 +1137,40 @@ class AudioPlayer {
                 container.appendChild(subfolderCard);
             });
         }
-
-        // Add subfolder button handler
-        const addBtn = container.querySelector('#addSubfolderBtn');
-        if (addBtn) {
-            addBtn.addEventListener('click', () => {
-                this.showAddSubfolderModal();
-            });
-        }
     }
 
-    // ===== Show Modal to Add Subfolder =====
-    showAddSubfolderModal() {
-        // TODO: Implement modal to select folder > subfolder to add to quick access
-        alert('Chức năng "Thêm thư mục" đang được phát triển. Bạn có thể thêm logic chọn subfolder ở đây.');
+    // ===== Toggle Favorite Subfolder =====
+    toggleFavoriteSubfolder(folderIndex, subfolderIndex, subfolderName, itemCount) {
+        const quickAccessSubfolders = JSON.parse(localStorage.getItem('quickAccessSubfolders') || '[]');
+
+        // Check if already in favorites
+        const existingIndex = quickAccessSubfolders.findIndex(item =>
+            item.folderIndex === folderIndex &&
+            item.subfolderIndex === subfolderIndex
+        );
+
+        if (existingIndex >= 0) {
+            // Remove from favorites
+            quickAccessSubfolders.splice(existingIndex, 1);
+        } else {
+            // Add to favorites
+            const folder = this.lectures[folderIndex];
+            quickAccessSubfolders.push({
+                folderName: folder.folder,
+                folderIndex: folderIndex,
+                subfolderName: subfolderName,
+                subfolderIndex: subfolderIndex,
+                itemCount: itemCount
+            });
+        }
+
+        localStorage.setItem('quickAccessSubfolders', JSON.stringify(quickAccessSubfolders));
+
+        // Re-render playlist view if it's currently visible
+        const playlistView = document.getElementById('playlistView');
+        if (playlistView && playlistView.classList.contains('active')) {
+            this.renderPlaylistView();
+        }
     }
 
     // ===== Initialize Playlist View =====
@@ -1271,6 +1295,13 @@ class AudioPlayer {
             folder.subfolders.forEach((subfolder, subfolderIndex) => {
                 const itemCount = subfolder.items ? subfolder.items.length : 0;
 
+                // Check if this subfolder is in favorites
+                const quickAccessSubfolders = JSON.parse(localStorage.getItem('quickAccessSubfolders') || '[]');
+                const isFavorite = quickAccessSubfolders.some(item =>
+                    item.folderIndex === this.libraryFolderIndex &&
+                    item.subfolderIndex === subfolderIndex
+                );
+
                 const subfolderCard = document.createElement('div');
                 subfolderCard.className = 'folder-card';
                 subfolderCard.innerHTML = `
@@ -1281,13 +1312,31 @@ class AudioPlayer {
                         <div class="folder-card-title">${subfolder.name}</div>
                         <div class="folder-card-subtitle">${itemCount} bài giảng</div>
                     </div>
+                    <div class="folder-card-actions">
+                        <button class="folder-favorite-btn ${isFavorite ? 'active' : ''}"
+                                data-folder-index="${this.libraryFolderIndex}"
+                                data-subfolder-index="${subfolderIndex}">
+                            <i class="fas fa-star"></i>
+                        </button>
+                    </div>
                     <div class="folder-card-arrow">
                         <i class="fas fa-chevron-right"></i>
                     </div>
                 `;
 
-                subfolderCard.addEventListener('click', () => {
-                    this.navigateLibraryToLectures(subfolderIndex);
+                subfolderCard.addEventListener('click', (e) => {
+                    // Don't navigate if clicking on favorite button
+                    if (!e.target.closest('.folder-favorite-btn')) {
+                        this.navigateLibraryToLectures(subfolderIndex);
+                    }
+                });
+
+                // Favorite button handler
+                const favoriteBtn = subfolderCard.querySelector('.folder-favorite-btn');
+                favoriteBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    this.toggleFavoriteSubfolder(this.libraryFolderIndex, subfolderIndex, subfolder.name, itemCount);
+                    favoriteBtn.classList.toggle('active');
                 });
 
                 container.appendChild(subfolderCard);
@@ -1340,7 +1389,7 @@ class AudioPlayer {
                     </div>
                     <div class="track-card-actions">
                         <button class="track-action-btn favorite-track-btn ${this.favorites.some(f => f.url === item.url) ? 'active' : ''}" data-url="${item.url}">
-                            <i class="fas fa-heart"></i>
+                            <i class="fas fa-star"></i>
                         </button>
                     </div>
                 `;
@@ -1849,11 +1898,11 @@ class AudioPlayer {
         if (index >= 0) {
             this.favorites.splice(index, 1);
             this.favoriteBtn.classList.remove('active');
-            this.favoriteBtn.querySelector('i').className = 'far fa-heart';
+            this.favoriteBtn.querySelector('i').className = 'far fa-star';
         } else {
             this.favorites.push(track);
             this.favoriteBtn.classList.add('active');
-            this.favoriteBtn.querySelector('i').className = 'fas fa-heart';
+            this.favoriteBtn.querySelector('i').className = 'fas fa-star';
         }
         
         localStorage.setItem('favorites', JSON.stringify(this.favorites));
@@ -1871,7 +1920,7 @@ class AudioPlayer {
         const isFavorite = this.favorites.some(f => f.url === track.url);
         
         this.favoriteBtn.classList.toggle('active', isFavorite);
-        this.favoriteBtn.querySelector('i').className = isFavorite ? 'fas fa-heart' : 'far fa-heart';
+        this.favoriteBtn.querySelector('i').className = isFavorite ? 'fas fa-star' : 'far fa-star';
     }
 
     // ===== Recently Played =====

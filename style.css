@@ -3246,3 +3246,55 @@ kbd {
 .folder-card:hover .folder-remove-btn:hover {
     background: rgba(255, 59, 48, 0.9);
 }
+
+/* ===== Folder Favorite Button (Star) ===== */
+.folder-favorite-btn {
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255, 149, 0, 0.1);
+    border: none;
+    border-radius: 8px;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all 200ms cubic-bezier(0.4, 0, 0.2, 1);
+    font-size: 0.9rem;
+}
+
+.folder-favorite-btn:hover {
+    background: rgba(255, 149, 0, 0.2);
+    color: var(--accent);
+    transform: scale(1.1);
+}
+
+.folder-favorite-btn.active {
+    background: var(--accent);
+    color: white;
+}
+
+.folder-favorite-btn.active:hover {
+    background: var(--accent-hover);
+    transform: scale(1.15);
+}
+
+.folder-card:hover .folder-favorite-btn {
+    background: rgba(255, 255, 255, 0.15);
+    color: rgba(255, 255, 255, 0.7);
+}
+
+.folder-card:hover .folder-favorite-btn.active {
+    background: rgba(255, 255, 255, 0.95);
+    color: var(--accent);
+}
+
+.folder-card:hover .folder-favorite-btn:hover {
+    background: rgba(255, 255, 255, 0.25);
+    color: white;
+}
+
+.folder-card:hover .folder-favorite-btn.active:hover {
+    background: white;
+    color: var(--accent);
+}
