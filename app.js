@@ -44,6 +44,11 @@ class AudioPlayer {
         this.sidebar = document.getElementById('sidebar');
         this.sidebarOverlay = document.getElementById('sidebarOverlay');
         
+        // Mobile Sidebar Elements
+        this.mobileSidebar = document.getElementById('mobileSidebar');
+        this.mobileSidebarOverlay = document.getElementById('mobileSidebarOverlay');
+        this.closeMobileSidebar = document.getElementById('closeMobileSidebar');
+        
         // Mini Player Elements
         this.miniPlayer = document.getElementById('miniPlayer');
         this.miniRepeatBtn = document.getElementById('miniRepeatBtn');
@@ -890,26 +895,47 @@ class AudioPlayer {
         }
     }
 
-    // ===== Mobile Sidebar Toggle =====
-    toggleSidebar() {
-        this.sidebar.classList.toggle('show');
-        if (this.sidebarOverlay) {
-            this.sidebarOverlay.classList.toggle('show');
+    // ===== Mobile Sidebar Toggle (Menu) =====
+    toggleMobileSidebar() {
+        if (this.mobileSidebar) {
+            this.mobileSidebar.classList.toggle('show');
+        }
+        if (this.mobileSidebarOverlay) {
+            this.mobileSidebarOverlay.classList.toggle('show');
         }
         // Prevent body scroll when sidebar is open
-        if (this.sidebar.classList.contains('show')) {
+        if (this.mobileSidebar && this.mobileSidebar.classList.contains('show')) {
             document.body.style.overflow = 'hidden';
         } else {
             document.body.style.overflow = '';
         }
     }
 
-    closeSidebar() {
-        this.sidebar.classList.remove('show');
-        if (this.sidebarOverlay) {
-            this.sidebarOverlay.classList.remove('show');
+    closeMobileSidebarMenu() {
+        if (this.mobileSidebar) {
+            this.mobileSidebar.classList.remove('show');
+        }
+        if (this.mobileSidebarOverlay) {
+            this.mobileSidebarOverlay.classList.remove('show');
         }
         document.body.style.overflow = '';
+    }
+
+    // ===== Old Sidebar Toggle (Disabled) =====
+    toggleSidebar() {
+        // Old sidebar is disabled on mobile
+        // this.sidebar.classList.toggle('show');
+        // if (this.sidebarOverlay) {
+        //     this.sidebarOverlay.classList.toggle('show');
+        // }
+    }
+
+    closeSidebar() {
+        // Old sidebar is disabled on mobile
+        // this.sidebar.classList.remove('show');
+        // if (this.sidebarOverlay) {
+        //     this.sidebarOverlay.classList.remove('show');
+        // }
     }
 
     // ===== Mini Player Functions =====
@@ -925,14 +951,20 @@ class AudioPlayer {
     // ===== Media Session API for Background Playback =====
     updateMediaSession(track) {
         if ('mediaSession' in navigator) {
+            // Set metadata for notification
             navigator.mediaSession.metadata = new MediaMetadata({
                 title: track.title,
                 artist: track.teacher || track.folder,
                 album: track.subfolder || 'Tịnh Độ Pháp Âm',
                 artwork: [
-                    { src: 'Title Logo.webp', sizes: '512x512', type: 'image/webp' }
+                    { src: 'Title Logo.webp', sizes: '512x512', type: 'image/webp' },
+                    { src: 'Title Logo.webp', sizes: '256x256', type: 'image/webp' },
+                    { src: 'Title Logo.webp', sizes: '128x128', type: 'image/webp' }
                 ]
             });
+
+            // Set initial playback state
+            navigator.mediaSession.playbackState = this.audio.paused ? 'paused' : 'playing';
 
             // Set up action handlers for media controls
             navigator.mediaSession.setActionHandler('play', () => {
@@ -969,16 +1001,25 @@ class AudioPlayer {
                 }
             });
 
-            // Update position state
-            this.audio.addEventListener('timeupdate', () => {
-                if ('setPositionState' in navigator.mediaSession) {
-                    navigator.mediaSession.setPositionState({
-                        duration: this.audio.duration || 0,
-                        playbackRate: this.audio.playbackRate,
-                        position: this.audio.currentTime || 0
-                    });
-                }
-            });
+            // Update position state when metadata loads
+            this.audio.addEventListener('loadedmetadata', () => {
+                this.updateMediaSessionPositionState();
+            }, { once: true });
+        }
+    }
+
+    // ===== Update Media Session Position State =====
+    updateMediaSessionPositionState() {
+        if ('mediaSession' in navigator && 'setPositionState' in navigator.mediaSession) {
+            try {
+                navigator.mediaSession.setPositionState({
+                    duration: this.audio.duration || 0,
+                    playbackRate: this.audio.playbackRate || 1.0,
+                    position: this.audio.currentTime || 0
+                });
+            } catch (error) {
+                console.log('Error updating position state:', error);
+            }
         }
     }
 
@@ -1803,11 +1844,21 @@ class AudioPlayer {
             this.playBtn.querySelector('i').className = 'fas fa-pause';
             const albumArt = document.querySelector('.album-art-inner');
             if (albumArt) albumArt.classList.add('playing');
+            
+            // Update media session playback state
+            if ('mediaSession' in navigator) {
+                navigator.mediaSession.playbackState = 'playing';
+            }
         });
         this.audio.addEventListener('pause', () => {
             this.playBtn.querySelector('i').className = 'fas fa-play';
             const albumArt = document.querySelector('.album-art-inner');
             if (albumArt) albumArt.classList.remove('playing');
+            
+            // Update media session playback state to keep notification visible
+            if ('mediaSession' in navigator) {
+                navigator.mediaSession.playbackState = 'paused';
+            }
         });
 
         // Previous/Next
@@ -1822,6 +1873,11 @@ class AudioPlayer {
             if (!this.isDragging) {
                 this.updateProgress();
                 this.saveState();
+                
+                // Update media session position state periodically
+                if (this.audio.currentTime % 5 < 0.5) { // Update every ~5 seconds
+                    this.updateMediaSessionPositionState();
+                }
             }
         });
         this.audio.addEventListener('loadedmetadata', () => {
@@ -1874,22 +1930,25 @@ class AudioPlayer {
             this.themeToggleDesktop.addEventListener('click', () => this.toggleTheme());
         }
 
-        // Mobile Menu Toggle
+        // Mobile Menu Toggle (New Mobile Sidebar)
         if (this.menuToggle) {
-            this.menuToggle.addEventListener('click', () => this.toggleSidebar());
+            this.menuToggle.addEventListener('click', () => this.toggleMobileSidebar());
         }
 
-        // Close sidebar when clicking overlay
-        if (this.sidebarOverlay) {
-            this.sidebarOverlay.addEventListener('click', () => this.closeSidebar());
+        // Close mobile sidebar when clicking close button
+        if (this.closeMobileSidebar) {
+            this.closeMobileSidebar.addEventListener('click', () => this.closeMobileSidebarMenu());
         }
 
-        // Close sidebar when clicking on a track (mobile)
-        this.playlist.addEventListener('click', (e) => {
-            if (e.target.closest('.track-item') && window.innerWidth <= 968) {
-                this.closeSidebar();
-            }
-        });
+        // Close mobile sidebar when clicking overlay
+        if (this.mobileSidebarOverlay) {
+            this.mobileSidebarOverlay.addEventListener('click', () => this.closeMobileSidebarMenu());
+        }
+
+        // Old sidebar handlers (disabled)
+        // if (this.sidebarOverlay) {
+        //     this.sidebarOverlay.addEventListener('click', () => this.closeSidebar());
+        // }
 
         // Mini Player Controls
         if (this.miniRepeatBtn) {
