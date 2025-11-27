@@ -727,6 +727,9 @@ class AudioPlayer {
         // Update mini player
         this.updateMiniPlayer(track);
         this.showMiniPlayer();
+        
+        // Update Media Session API for background playback
+        this.updateMediaSession(track);
     }
 
     // ===== Update Active Track Highlight =====
@@ -916,6 +919,66 @@ class AudioPlayer {
         }
         if (this.miniDuration && this.audio.duration) {
             this.miniDuration.textContent = this.formatTime(this.audio.duration);
+        }
+    }
+
+    // ===== Media Session API for Background Playback =====
+    updateMediaSession(track) {
+        if ('mediaSession' in navigator) {
+            navigator.mediaSession.metadata = new MediaMetadata({
+                title: track.title,
+                artist: track.teacher || track.folder,
+                album: track.subfolder || 'Tịnh Độ Pháp Âm',
+                artwork: [
+                    { src: 'Title Logo.webp', sizes: '512x512', type: 'image/webp' }
+                ]
+            });
+
+            // Set up action handlers for media controls
+            navigator.mediaSession.setActionHandler('play', () => {
+                this.audio.play();
+            });
+
+            navigator.mediaSession.setActionHandler('pause', () => {
+                this.audio.pause();
+            });
+
+            navigator.mediaSession.setActionHandler('previoustrack', () => {
+                this.prevTrack();
+            });
+
+            navigator.mediaSession.setActionHandler('nexttrack', () => {
+                this.nextTrack();
+            });
+
+            navigator.mediaSession.setActionHandler('seekbackward', (details) => {
+                const skipTime = details.seekOffset || 10;
+                this.audio.currentTime = Math.max(0, this.audio.currentTime - skipTime);
+            });
+
+            navigator.mediaSession.setActionHandler('seekforward', (details) => {
+                const skipTime = details.seekOffset || 10;
+                this.audio.currentTime = Math.min(this.audio.duration, this.audio.currentTime + skipTime);
+            });
+
+            navigator.mediaSession.setActionHandler('seekto', (details) => {
+                if (details.fastSeek && 'fastSeek' in this.audio) {
+                    this.audio.fastSeek(details.seekTime);
+                } else {
+                    this.audio.currentTime = details.seekTime;
+                }
+            });
+
+            // Update position state
+            this.audio.addEventListener('timeupdate', () => {
+                if ('setPositionState' in navigator.mediaSession) {
+                    navigator.mediaSession.setPositionState({
+                        duration: this.audio.duration || 0,
+                        playbackRate: this.audio.playbackRate,
+                        position: this.audio.currentTime || 0
+                    });
+                }
+            });
         }
     }
 
