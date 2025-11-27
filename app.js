@@ -862,10 +862,17 @@ class AudioPlayer {
         console.log('🔵 openFullPlayer called, window width:', window.innerWidth);
         if (window.innerWidth <= 968) {
             const playerSection = document.querySelector('.player-section');
+
             if (playerSection) {
-                console.log('✅ Opening full player');
+                console.log('✅ Player section found, computed display:', window.getComputedStyle(playerSection).display);
+
+                // CRITICAL FIX: Force display before adding fullscreen class
+                // CSS hides .player-section on mobile, we need to override
+                playerSection.style.display = 'flex';
+
+                console.log('✅ Opening full player, adding fullscreen class');
                 playerSection.classList.add('fullscreen');
-                
+
                 // Add close button for fullscreen
                 if (!playerSection.querySelector('.close-fullscreen')) {
                     const closeBtn = document.createElement('button');
@@ -874,12 +881,16 @@ class AudioPlayer {
                     closeBtn.addEventListener('click', () => this.closeFullPlayer());
                     playerSection.insertBefore(closeBtn, playerSection.firstChild);
                 }
-                
+
                 // Hide mini player when full player is open
                 if (this.miniPlayer) {
                     console.log('🔵 Hiding mini player');
                     this.miniPlayer.style.display = 'none';
                 }
+
+                console.log('✅ Full player should be visible now');
+            } else {
+                console.error('❌ Player section NOT FOUND in DOM!');
             }
         } else {
             console.log('❌ Window width > 968, not opening full player');
@@ -887,36 +898,26 @@ class AudioPlayer {
     }
 
     closeFullPlayer() {
-        console.log('Closing full player');
+        console.log('🔵 Closing full player');
         const playerSection = document.querySelector('.player-section');
         if (playerSection) {
             playerSection.classList.remove('fullscreen');
-            // Remove close button
-            const closeBtn = playerSection.querySelector('.close-fullscreen');
-            if (closeBtn) {
-                closeBtn.remove();
-            }
-        }
-        // Show mini player again
-        if (this.miniPlayer) {
-            console.log('Showing mini player again');
-            this.miniPlayer.style.display = '';
-        }
-    }
 
-    closeFullPlayer() {
-        const playerSection = document.querySelector('.player-section');
-        if (playerSection) {
-            playerSection.classList.remove('fullscreen');
+            // CRITICAL FIX: Hide player section again on mobile
+            // CSS has display: none for .player-section on mobile
+            playerSection.style.display = 'none';
+
             // Remove close button
             const closeBtn = playerSection.querySelector('.close-fullscreen');
             if (closeBtn) {
                 closeBtn.remove();
             }
         }
+
         // Show mini player again
         if (this.miniPlayer) {
-            this.miniPlayer.style.display = '';
+            console.log('✅ Showing mini player again');
+            this.miniPlayer.style.display = 'block';
         }
     }
 
